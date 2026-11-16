@@ -1,0 +1,4 @@
+proposed-options.md
+__pycache__/
+*.pyc
+.DS_Store
