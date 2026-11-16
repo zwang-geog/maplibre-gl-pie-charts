@@ -23,6 +23,8 @@ export class PieChartLayer {
         hole = 0,
         opacity = 1,
         requestInit,
+        slot,
+        readyForDisplay = true,
     } = {}) {
         if (!id) throw new Error('PieChartLayer needs an id');
 
@@ -44,6 +46,9 @@ export class PieChartLayer {
         this.id = id;
         this.type = 'custom';
         this.renderingMode = '2d';
+        if (slot !== undefined) {
+            this.slot = slot;
+        }
 
         this.url = hasUrl ? url : undefined;
         this.data = hasData ? data : undefined;
@@ -54,6 +59,7 @@ export class PieChartLayer {
         this.radius = validateRadius(radius);
         this.hole = validateZeroToOneFloat(hole, 'hole');
         this.opacity = validateZeroToOneFloat(opacity, 'opacity');
+        this.readyForDisplay = readyForDisplay;
         this.requestInit = requestInit;
 
         this.map = null;
@@ -115,10 +121,13 @@ export class PieChartLayer {
         this.gl = null;
     }
 
-    render(gl, options) {
-        if (!this.resources || this.count === 0) return;
+    render(gl, args) {
+        if (!this.readyForDisplay || !this.resources || this.count === 0) return;
 
-        const matrix = options.defaultProjectionData?.mainMatrix ?? options.modelViewProjectionMatrix;
+        // MapLibre 5+ passes an options object. MapLibre 4 and Mapbox pass the mercator matrix.
+        const matrix = args?.defaultProjectionData?.mainMatrix
+            ?? args?.modelViewProjectionMatrix
+            ?? args;
         const {program, uniforms, vao} = this.resources;
 
         gl.useProgram(program);
