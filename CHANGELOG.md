@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+### Fixed
+
+- Slices now start at the top of the chart (12 o'clock) and run clockwise in `slices` order. In previous versions, they started at the bottom and ran counterclockwise, because the shader measured the angle before the screen's y axis was flipped.
+
 ## 0.2.0
 
 ### Added

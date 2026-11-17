@@ -15,7 +15,8 @@
 // -2/drawingBufferHeight). NDC x runs from -1 to 1 across the buffer. NDC y
 // runs from -1 at the bottom to +1 at the top, while canvas y points down, so
 // the y term is negative and positive extrude y moves toward the bottom of
-// the screen. Angle 0 is along extrude +y and increases clockwise in that space.
+// the screen. The fragment shader therefore measures the angle from extrude
+// -y, so slice 0 starts at the top of the screen and slices run clockwise.
 //
 // gl_Position is clip space, not NDC. w is the fourth component of that vec4,
 // and the GPU displays (x/w, y/w, z/w). Multiplying clip_offset by center.w
@@ -44,7 +45,7 @@ uniform int u_filter_operand[18];
 uniform int u_filter_op[18];
 uniform float u_filter_value[18];
 
-in vec2 a_extrude;  // quad corner in -1..1, shared by every pie. +y is up
+in vec2 a_extrude;  // quad corner in -1..1, shared by every pie. +y is down on screen
 in vec2 a_mercator; // pie center in mercator 0..1
 in float a_step;    // radius step index, a whole number
 in vec4 a_shares0;  // cumulative slice shares 0..3, each in 0..1
@@ -152,7 +153,8 @@ void main() {
     shares[6] = v_shares1.z;
     shares[7] = v_shares1.w;
 
-    float angle = atan(v_extrude.x, v_extrude.y);
+    // 0 at the top of the screen, increasing clockwise.
+    float angle = atan(v_extrude.x, -v_extrude.y);
     if (angle < 0.0) angle += TAU;
     float t = angle / TAU;
 

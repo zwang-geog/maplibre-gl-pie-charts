@@ -26,6 +26,29 @@
         #status { margin: 8px 0 0; color: #555; }
         .key { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
         .swatch { width: 12px; height: 12px; border-radius: 2px; }
+        #open-filter { margin-top: 10px; padding: 4px 10px; font: inherit; cursor: pointer; }
+        #filter-dialog {
+            position: absolute;
+            top: 12px;
+            left: 260px;
+            margin: 0;
+            z-index: 2;
+            padding: 12px 14px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.97);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            font: 13px/1.4 sans-serif;
+            color: #1c1c1c;
+        }
+        #filter-dialog h2 { margin: 0 0 2px; font-size: 15px; }
+        #filter-dialog .hint { margin: 0 0 8px; color: #555; font-size: 12px; }
+        #filter-dialog table { border-collapse: collapse; }
+        #filter-dialog th, #filter-dialog td { padding: 3px 6px; text-align: left; }
+        #filter-dialog th { font-weight: 600; color: #555; font-size: 12px; }
+        #filter-dialog select { font: inherit; }
+        #filter-dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+        #filter-dialog .actions button { padding: 4px 10px; font: inherit; cursor: pointer; }
     </style>
     <script type="importmap">
     {
@@ -49,10 +72,47 @@
         <div class="key"><span class="swatch" style="background:#5c8f3a"></span>Bachelor's degree</div>
         <div class="key"><span class="swatch" style="background:#5b4d8a"></span>Graduate degree</div>
         <p id="status">Loading charts…</p>
+        <button type="button" id="open-filter">Filter charts</button>
     </aside>
+    <dialog id="filter-dialog">
+        <h2>Filter charts</h2>
+        <p class="hint">Checked rows must all pass for a county to be drawn.</p>
+        <table>
+            <thead>
+                <tr><th>Apply</th><th>Attribute</th><th>Operator</th><th>Value</th></tr>
+            </thead>
+            <tbody id="filter-rows"></tbody>
+        </table>
+        <div class="actions">
+            <button type="button" id="clear-filter">Clear</button>
+            <button type="button" id="close-filter">Close</button>
+        </div>
+    </dialog>
     <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js"></script>
     <script type="module">
-        import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts@0.1.1/dist/index.mjs';
+        import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts/dist/index.mjs';
+
+        const SLICES = [
+            {name: 'below_hs', color: '#c4533a', label: 'No high school diploma'},
+            {name: 'high_school', color: '#e09a3e', label: 'High school'},
+            {name: 'some_college', color: '#3d8ea6', label: 'Some college'},
+            {name: 'bachelors', color: '#5c8f3a', label: "Bachelor's degree"},
+            {name: 'graduate', color: '#5b4d8a', label: 'Graduate degree'},
+        ];
+        const STEPS = [
+            [8000, 6],
+            [20000, 9],
+            [50000, 13],
+            [150000, 17],
+        ];
+        const FALLBACK = 22;
+        const OPERATORS = ['>', '>=', '==', '<', '<='];
+        const SHARE_OPTIONS = Array.from({length: 21}, (_, i) => i * 5);
+        const STEP_OPTIONS = Array.from({length: STEPS.length + 1}, (_, i) => i);
+        const INITIAL_ROWS = [
+            ...SLICES.map(() => ({enabled: false, op: '>', value: 30})),
+            {enabled: false, op: '>=', value: 2},
+        ];
 
         const status = document.getElementById('status');
         const style = await fetch('https://tiles.openfreemap.org/styles/positron').then((response) => {
@@ -72,20 +132,97 @@
         const pies = new PieChartLayer({
             id: 'education',
             url: './tl_2025_us_county_points.parquet',
-            slices: ['below_hs', 'high_school', 'some_college', 'bachelors', 'graduate'],
-            colors: ['#c4533a', '#e09a3e', '#3d8ea6', '#5c8f3a', '#5b4d8a'],
-            radius: {
-                steps: [
-                    [8000, 6],
-                    [20000, 9],
-                    [50000, 13],
-                    [150000, 17],
-                ],
-                fallback: 22,
-            },
+            slices: SLICES.map((slice) => slice.name),
+            colors: SLICES.map((slice) => slice.color),
+            radius: {steps: STEPS, fallback: FALLBACK},
             opacity: 0.92,
             hole: 0.5,
         });
+
+        const dialog = document.getElementById('filter-dialog');
+        const rowsBody = document.getElementById('filter-rows');
+        let rows = INITIAL_ROWS.map((row) => ({...row}));
+        renderRows();
+
+        document.getElementById('open-filter').addEventListener('click', () => dialog.show());
+        document.getElementById('close-filter').addEventListener('click', () => dialog.close());
+        document.getElementById('clear-filter').addEventListener('click', () => {
+            rows = INITIAL_ROWS.map((row) => ({...row}));
+            renderRows();
+            pies.setFilter(null);
+        });
+
+        function stepLabel(index) {
+            const format = (value) => value.toLocaleString();
+            if (index === 0) return `0: ≤ ${format(STEPS[0][0])}`;
+            if (index === STEPS.length) return `${index}: > ${format(STEPS[index - 1][0])}`;
+            return `${index}: ${format(STEPS[index - 1][0])}–${format(STEPS[index][0])}`;
+        }
+
+        function filterFromRows() {
+            const conditions = [];
+            rows.forEach((row, index) => {
+                if (!row.enabled) return;
+                if (index < SLICES.length) {
+                    conditions.push([row.op, SLICES[index].name, row.value / 100]);
+                } else {
+                    conditions.push([row.op, '$step', row.value]);
+                }
+            });
+            return conditions.length === 0 ? null : ['all', ...conditions];
+        }
+
+        function updateRow(index, change) {
+            rows[index] = {...rows[index], ...change};
+            pies.setFilter(filterFromRows());
+        }
+
+        function select(label, options, value, onChange) {
+            const element = document.createElement('select');
+            element.setAttribute('aria-label', label);
+            for (const option of options) {
+                element.add(new Option(option.text, option.value));
+            }
+            element.value = String(value);
+            element.addEventListener('change', () => onChange(element.value));
+            return element;
+        }
+
+        function renderRows() {
+            rowsBody.replaceChildren(...rows.map((row, index) => {
+                const isStep = index === SLICES.length;
+                const label = isStep ? 'Total population (size step)' : `${SLICES[index].label} share`;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = row.enabled;
+                checkbox.setAttribute('aria-label', `Apply ${label} filter`);
+                checkbox.addEventListener('change', () => updateRow(index, {enabled: checkbox.checked}));
+
+                const operator = select(
+                    `${label} operator`,
+                    OPERATORS.map((op) => ({text: op, value: op})),
+                    row.op,
+                    (op) => updateRow(index, {op}),
+                );
+                const value = select(
+                    `${label} value`,
+                    isStep
+                        ? STEP_OPTIONS.map((step) => ({text: stepLabel(step), value: step}))
+                        : SHARE_OPTIONS.map((share) => ({text: `${share}%`, value: share})),
+                    row.value,
+                    (selected) => updateRow(index, {value: Number(selected)}),
+                );
+
+                const tr = document.createElement('tr');
+                for (const content of [checkbox, label, operator, value]) {
+                    const td = document.createElement('td');
+                    td.append(content);
+                    tr.append(td);
+                }
+                return tr;
+            }));
+        }
 
         function showCountyBoundaries(style) {
             const boundaries = style.layers.find((layer) => layer.id === 'boundary_3');
