@@ -1,7 +1,7 @@
 import {pieTableFromFlatGeobuf} from './parse-flatgeobuf.js';
 import {featuresFromGeoJSON} from './parse-geojson.js';
 import {pieTableFromGeoParquet} from './parse-geoparquet.js';
-import {buildPieTable, MAX_SLICES} from './pie-table.js';
+import {buildPieTable, MAX_RADIUS_SIZES, MAX_SLICES} from './pie-table.js';
 import {
     bindPieAttributes,
     createPieProgram,
@@ -10,6 +10,12 @@ import {
 } from './program.js';
 
 const COLOR_SLOTS = 8;
+// Two conditions, a range, on each slice and on $step.
+const MAX_FILTER_CONDITIONS = 2 * (MAX_SLICES + 1);
+// Matches STEP_OPERAND and the op codes in the vertex shader.
+const STEP_OPERAND = 8;
+const STEP_NAME = '$step';
+const FILTER_OPS = {'==': 1, '>': 2, '>=': 3, '<': 4, '<=': 5};
 
 export class PieChartLayer {
     constructor({
@@ -22,6 +28,7 @@ export class PieChartLayer {
         radius = 16,
         hole = 0,
         opacity = 1,
+        filter = null,
         requestInit,
         slot,
         readyForDisplay = true,
@@ -57,8 +64,10 @@ export class PieChartLayer {
         this.slices = validateSlices(slices);
         this.colors = validateColors(colors, this.slices.length);
         this.radius = validateRadius(radius);
+        this.stepSizes = stepSizesOf(this.radius);
         this.hole = validateZeroToOneFloat(hole, 'hole');
         this.opacity = validateZeroToOneFloat(opacity, 'opacity');
+        this.filterUniforms = parseFilter(filter, this.slices);
         this.readyForDisplay = readyForDisplay;
         this.requestInit = requestInit;
 
@@ -113,6 +122,12 @@ export class PieChartLayer {
         });
     }
 
+    // Takes effect on the next frame. The charts are not read or uploaded again.
+    setFilter(filter) {
+        this.filterUniforms = parseFilter(filter, this.slices);
+        this.map?.triggerRepaint();
+    }
+
     onRemove(map, gl) {
         this.count = 0;
         deletePieProgram(gl, this.resources);
@@ -144,6 +159,13 @@ export class PieChartLayer {
         // CSS pixels per the ratio captured in onAdd. The drawing buffer is
         // the CSS size times this same ratio.
         gl.uniform1f(uniforms.pixelRatio, this.pixelRatio);
+        gl.uniform1fv(uniforms.stepSizes, this.stepSizes);
+        const filter = this.filterUniforms;
+        gl.uniform1i(uniforms.filterCount, filter.count);
+        gl.uniform1i(uniforms.filterAny, filter.any ? 1 : 0);
+        gl.uniform1iv(uniforms.filterOperand, filter.operands);
+        gl.uniform1iv(uniforms.filterOp, filter.ops);
+        gl.uniform1fv(uniforms.filterValue, filter.values);
         gl.uniform4fv(uniforms.colors, this.colorBuffer);
         gl.uniform1i(uniforms.sliceCount, this.sliceCount);
         gl.uniform1f(uniforms.hole, this.hole);
@@ -197,6 +219,9 @@ function validateRadius(radius) {
         throw new Error('radius must be a number or a step scale');
     }
     if (radius.steps.length === 0) throw new Error('radius.steps needs at least one step');
+    if (radius.steps.length > MAX_RADIUS_SIZES - 1) {
+        throw new Error(`radius.steps supports at most ${MAX_RADIUS_SIZES - 1} steps`);
+    }
     const steps = [];
     let previous = -Infinity;
     for (const step of radius.steps) {
@@ -218,6 +243,75 @@ function validateRadius(radius) {
         throw new Error('radius.fallback must be greater than 0');
     }
     return {steps, fallback: radius.fallback};
+}
+
+// Size for each step index, with the fallback after the last step.
+function stepSizesOf(radius) {
+    const sizes = new Float32Array(MAX_RADIUS_SIZES);
+    if (typeof radius === 'number') {
+        sizes[0] = radius;
+        return sizes;
+    }
+    radius.steps.forEach(([, size], index) => {
+        sizes[index] = size;
+    });
+    sizes[radius.steps.length] = radius.fallback;
+    return sizes;
+}
+
+// One condition, or one 'all' or 'any' holding only conditions.
+// A condition is [op, operand, number]: operand is a slice name, compared
+// by its share from 0 to 1, or '$step', the radius step index.
+function parseFilter(filter, slices) {
+    const uniforms = {
+        count: 0,
+        any: false,
+        operands: new Int32Array(MAX_FILTER_CONDITIONS),
+        ops: new Int32Array(MAX_FILTER_CONDITIONS),
+        values: new Float32Array(MAX_FILTER_CONDITIONS),
+    };
+    if (filter == null) return uniforms;
+    if (!Array.isArray(filter)) throw new Error('filter must be an array expression');
+
+    let conditions = [filter];
+    if (filter[0] === 'all' || filter[0] === 'any') {
+        conditions = filter.slice(1);
+        uniforms.any = filter[0] === 'any';
+        if (conditions.length === 0 || conditions.length > MAX_FILTER_CONDITIONS) {
+            throw new Error(`filter "${filter[0]}" needs 1 to ${MAX_FILTER_CONDITIONS} conditions`);
+        }
+    }
+
+    conditions.forEach((condition, index) => {
+        const {operand, op, value} = parseCondition(condition, slices);
+        uniforms.operands[index] = operand;
+        uniforms.ops[index] = op;
+        uniforms.values[index] = value;
+    });
+    uniforms.count = conditions.length;
+    return uniforms;
+}
+
+function parseCondition(condition, slices) {
+    if (Array.isArray(condition) && (condition[0] === 'all' || condition[0] === 'any')) {
+        throw new Error('filter "all" and "any" cannot be nested');
+    }
+    if (!Array.isArray(condition) || condition.length !== 3) {
+        throw new Error('filter conditions are [op, operand, number]');
+    }
+    const [op, operand, value] = condition;
+    if (!Object.hasOwn(FILTER_OPS, op)) {
+        throw new Error(`filter operator "${op}" must be one of ${Object.keys(FILTER_OPS).join(', ')}`);
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new Error('filter value must be a finite number');
+    }
+    if (operand === STEP_NAME) return {operand: STEP_OPERAND, op: FILTER_OPS[op], value};
+    const slice = typeof operand === 'string' && !operand.startsWith('$') ? slices.indexOf(operand) : -1;
+    if (slice < 0) {
+        throw new Error(`filter operand "${operand}" must be a slice name or ${STEP_NAME}`);
+    }
+    return {operand: slice, op: FILTER_OPS[op], value};
 }
 
 function validateZeroToOneFloat(value, name) {

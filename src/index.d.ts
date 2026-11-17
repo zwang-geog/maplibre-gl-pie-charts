@@ -11,6 +11,20 @@ export interface PieChartRadiusScale {
     fallback: number;
 }
 
+export type PieChartFilterOperator = '==' | '>' | '>=' | '<' | '<=';
+
+/**
+ * `[op, operand, number]`. A slice name compares that slice's share, from 0 to 1.
+ * `'$step'` compares the radius step index: 0 for the first step, and the
+ * fallback after the last step. A uniform radius is step 0.
+ */
+export type PieChartFilterCondition = readonly [PieChartFilterOperator, string, number];
+
+/** One condition, or one `all` or `any` holding 1 to 18 conditions. No nesting. */
+export type PieChartFilter =
+    | PieChartFilterCondition
+    | readonly ['all' | 'any', ...PieChartFilterCondition[]];
+
 export type PieChartData =
     | {type: 'FeatureCollection'; features: ReadonlyArray<PieChartFeature>}
     | PieChartFeature
@@ -34,12 +48,14 @@ interface PieChartLayerOptionsBase {
     slices: readonly string[];
     /** One color per slice, in the same order. Hex, `rgb()`, `rgba()`, or a numeric channel array. */
     colors: readonly PieChartColor[];
-    /** Chart size in CSS pixels. A number is a uniform radius. Defaults to 16. */
+    /** Chart size in CSS pixels. A number is a uniform radius. Defaults to 16. A step scale has at most 15 steps. */
     radius?: number | PieChartRadiusScale;
     /** Inner radius as a fraction of the chart radius, from 0 to 1. Defaults to 0. */
     hole?: number;
     /** Chart opacity, from 0 to 1. Defaults to 1. */
     opacity?: number;
+    /** Draws only the charts that pass. `null` draws every chart. Defaults to `null`. */
+    filter?: PieChartFilter | null;
     /** Forwarded to the `url` fetch for GeoParquet, FlatGeobuf, and GeoJSON. */
     requestInit?: RequestInit;
     /** Mapbox GL JS slot. Set on the layer only when provided. */
@@ -83,6 +99,9 @@ export class PieChartLayer {
     loaded: Promise<{count: number; sliceCount: number} | null>;
     count: number;
     error: Error | null;
+
+    /** Replaces the client-side filter on the next frame. The charts are not read or uploaded again. */
+    setFilter(filter: PieChartFilter | null): void;
 
     onAdd(map: PieChartMap, gl: WebGLRenderingContext | WebGL2RenderingContext): void;
     onRemove(map: PieChartMap, gl: WebGLRenderingContext | WebGL2RenderingContext): void;

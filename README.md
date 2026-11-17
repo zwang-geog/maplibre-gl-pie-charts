@@ -4,29 +4,34 @@
 
 **Add a WebGL pie or donut chart layer on a MapLibre GL JS or Mapbox GL JS map to compare share patterns across geographic units.**
 
-A pie chart layer draws one chart on each feature of a map layer. If a feature has two or more non-negative numeric attributes, and those attributes are parts of a whole, the chart is a direct way to explore their shares. Each attribute becomes one slice, the wedge of the pie. The angle of that slice is the attribute's share of the feature's total, so a quick look shows how the mix differs from place to place.
-
-The attributes can be any set of sub-categories you want to compare within a feature:
-
-- Votes by candidate in a precinct, such as candidate A, candidate B, and the other candidates
-- Languages spoken at home in a census tract, such as English, Spanish, and Chinese
-- Land use or vegetation type in a subdivision, such as forest, cropland, and developed land
-- Educational attainment in a county, such as no high school diploma, high school, some college, a bachelor's degree, and a graduate degree
-
-Read the wedges as composition, not as a ranking. People judge angle and area poorly, so a pie chart is a weak way to decide which category is largest by a small margin. It is a better fit for seeing diversity and broad geographic patterns: where one group dominates, where the mix is even, and where that mix changes across the map. The [ArcGIS Maps SDK for JavaScript](https://developers.arcgis.com/javascript/latest/visualization/data-driven-styles/charts/) describes the same use of pie charts on features.
-
-## A layer for MapLibre and Mapbox
-
-This package adds a pie or donut chart layer to a MapLibre GL JS or Mapbox GL JS map. One chart is drawn for each feature, from the numeric attributes you choose. Every chart can share one uniform radius, or the radius can follow a step scale based on the sum of the slice values.
-
 <p align="center">
-  <img src="assets/pie-chart-layer-screenshot.png" width="48%" alt="Pie charts of educational attainment for counties in Florida">
-  <img src="assets/donut-chart-layer-screenshot.png" width="48%" alt="Donut charts of educational attainment for the same counties in Florida">
+  <img src="https://raw.githubusercontent.com/zwang-geog/maplibre-gl-pie-charts/refs/heads/master/assets/pie-chart-layer-screenshot.png" width="48%" alt="Pie charts of educational attainment for counties in Florida">
+  <img src="https://raw.githubusercontent.com/zwang-geog/maplibre-gl-pie-charts/refs/heads/master/assets/donut-chart-layer-screenshot.png" width="48%" alt="Donut charts of educational attainment for the same counties in Florida">
 </p>
 
-Educational attainment for counties, viewed over Florida. These charts use a step radius, so a county with a larger total is drawn larger. The map on the left uses solid pies. The map on the right uses donuts.
+*Figure 1: US Educational attainment by counties, viewed over Florida, using maplibre-gl-pie-charts PieChartLayer class*
 
-A donut is that same chart with a round hole in the middle. The `hole` option is a fraction of the chart's radius. A value of 0 leaves a solid pie, and any greater value opens a hole. A `hole` of 0.5, for example, makes the hole half as wide as the chart. The ring can look lighter than a filled pie, and the open center is a place for a label if you want one. The [ArcGIS Maps SDK for JavaScript](https://developers.arcgis.com/javascript/latest/visualization/data-driven-styles/charts/) describes the same donut option for its pie chart renderer.
+To explore what the package can do, open the [live demo of US educational attainment by county](https://zwang-geog.github.io/maplibre-gl-pie-charts/demos/us-education/).
+
+A pie chart layer **draws one pie chart for each geographic feature** (point recommended, polygon or polyline also acceptable), using the feature's **two or more non-negative numeric attributes**, and those **attributes are parts of a whole** (e.g., number of votes received by each candidate, areas of land use or vegetation type categories, number of people grouped by different population characteristics). Such a pie chart is a direct way to explore the **shares** of those attributes that represent distinct groups or categories: each attribute becomes one **slice**—the wedge of the pie—and the angle of that slice is **the attribute's share of the feature's total**. A pie chart layer therefore provides a quick look showing **how the mix differs from place to place**.
+
+A pie chart layer suits data like these:
+
+| Use case | Attributes representing categories or groups | Value of each attribute for a feature |
+| --- | --- | --- |
+| Votes by candidate in a precinct | Candidate A, candidate B, and the other candidates | Number of votes the candidate received in the precinct |
+| Languages spoken at home in a census tract | English, Spanish, and Chinese | Number of residents in the tract who speak that language at home |
+| Land use or vegetation type in a subdivision | Forest, cropland, and developed land | Area of that land type in the subdivision |
+| Educational attainment in a county | No high school diploma, high school, some college, a bachelor's degree, and a graduate degree | Number of adults in the county whose highest level of education is that category |
+
+With maplibre-gl-pie-charts `PieChartLayer` class, every chart can share one uniform radius, or **the radius can follow a step scale based on the sum of the slice values**. For example, the charts in Figure 1 use a step radius, so a county with a larger total is drawn larger (see Quick start 2 for details).
+
+Charts can also be filtered by a slice's share or by radius step. The filter runs on the client side, so it can be updated as the user interacts with the map (see Quick start 5).
+
+Additionally, maplibre-gl-pie-charts supports **styling the charts as donuts**. A donut chart is that same pie chart with a round hole in the middle. The donut chart layer styling is controlled by the `hole` constructor option, which is the inner radius as a fraction of the chart's radius. A value of 0 leaves a solid pie, and any greater value opens a hole. A `hole` of 0.5, for example, makes the hole half as wide as the chart. In Figure 1, the map on the left uses solid pies, and the map on the right uses donuts. The ring of a donut can look lighter than a filled pie, and the open center is a place for a label if you want one.
+
+> [!TIP]
+> People judge angle and area poorly, so a pie chart is a weak way to decide which category is largest by a small margin (i.e., a close ranking). Rather, a pie chart layer is a better fit for seeing diversity and broad geographic patterns: where one group dominates, where the mix is even, and where that mix changes across the map. The [ArcGIS Maps SDK for JavaScript](https://developers.arcgis.com/javascript/latest/visualization/data-driven-styles/charts/) describes the same use of pie charts on features.
 
 ## Quick start
 
@@ -181,19 +186,19 @@ A number is a uniform radius. Every chart is drawn at that size, and the number 
 radius: 16,
 ```
 
-A step scale varies the radius by the sum of a feature's slice values. `steps` is a list of `[total, size]` pairs, and the totals must increase. The first step whose total is greater than or equal to the sum supplies the size. Each size is fixed. A sum larger than every total uses `fallback`. Every size and `fallback` must be greater than 0.
+A step scale varies the radius by the sum of a feature's slice values. `steps` is a list of `[total, size]` pairs, and the totals must increase. The first step whose total is greater than or equal to the sum supplies the size. A sum larger than every total uses `fallback`. Every size and `fallback` must be greater than 0. A step scale can have at most 15 non-fallback steps (i.e., the array length of radius.steps cannot exceed 15).
 
 Suppose one feature has a first slice of 3000, a second slice of 8000, and a third slice of 7500. The sum of those slice values is 18500. Given the following expression, 20000 is the first step whose total is greater than or equal to 18500, so the chart is drawn at 9 pixels.
 
 ```js
 radius: {
     steps: [
-        [8000, 6],
-        [20000, 9],
-        [50000, 13],
-        [150000, 17],
+        [8000, 6],    // sum of slice values <= 8000: 6 px ($step 0)
+        [20000, 9],   // 8000 < sum <= 20000: 9 px ($step 1)
+        [50000, 13],  // 20000 < sum <= 50000: 13 px ($step 2)
+        [150000, 17], // 50000 < sum <= 150000: 17 px ($step 3)
     ],
-    fallback: 22,
+    fallback: 22,     // sum > 150000: 22 px ($step 4)
 },
 ```
 
@@ -270,6 +275,47 @@ map.on('load', () => {
 map.setLayoutProperty('pie-layer', 'visibility', 'visible'); // show
 ```
 
+### 5 Filter the charts
+
+The optional `filter` constructor option takes a condition. Only the charts that pass the condition are drawn.
+
+A condition has the form `[operator, operand, number]`. It tests either **one slice's share** or **the step that the sum of slice values falls in**.
+
+| Part | Slice share | Sum step |
+| --- | --- | --- |
+| `operator` | `==`, `>`, `>=`, `<`, or `<=` | `==`, `>`, `>=`, `<`, or `<=` |
+| `operand` | An attribute name in `slices` | `$step` |
+| `number` | The share from 0 to 1. `0.3` means 30%, not a raw value of 0.3. | The radius step index from Quick start 2. The first step is `0`, and `fallback` is the index after the last step. A uniform radius is step `0`. |
+| Example condition | `['>', 'bachelors', 0.3]` | `['>=', '$step', 2]` |
+| Use case | Show features where one category makes up more, or less, than a given part of the whole | Show features by chart size, because each step draws one radius chosen from the sum of slice values |
+
+A share rarely equals a number exactly, so `==` is mostly useful with `$step`.
+
+A filter can only test the attributes listed in `slices`. An attribute that is not drawn as a slice cannot be filtered, and naming one throws an error.
+
+After the layer is added, the `setFilter` method updates the filter applied to it, for example from a slider or a checkbox. The filter runs in the browser, so the file is not fetched again, and the map updates right away as the user adjusts it. Call `setFilter` on the `PieChartLayer` object, not on the map. `PieChartLayer` is a custom layer, which `map.setFilter` does not support.
+
+```js
+// Show only counties where more than 30% of adults hold a bachelor's degree
+pies.setFilter(['>', 'bachelors', 0.3]);
+```
+
+Multiple conditions can be combined with `all` or `any`. `all` works like SQL `AND`: every condition must pass. `any` works like SQL `OR`: one passing condition is enough. Up to 18 conditions can be combined, and `all` and `any` cannot be nested.
+
+```js
+pies.setFilter([
+    'all',
+    ['>', 'bachelors', 0.3],
+    ['>=', '$step', 2], // a sum above 20000, given the steps in Quick start 2
+]);
+```
+
+To remove a filter that was set earlier and draw every chart again, pass `null`:
+
+```js
+pies.setFilter(null);
+```
+
 ## Class options
 
 `PieChartLayer` takes these constructor options. Set `url` or `data`. `id`, `slices`, and `colors` are required.
@@ -285,9 +331,37 @@ map.setLayoutProperty('pie-layer', 'visibility', 'visible'); // show
 | `radius` | `16` | Chart size in CSS pixels. A number greater than 0 is a uniform radius. An object `{steps, fallback}` is a step scale. See Quick start 2. |
 | `hole` | `0` | Inner radius as a fraction of the chart radius, from 0 to 1. `0` is a solid pie. `0.5` makes the hole half as wide as the chart. |
 | `opacity` | `1` | Chart opacity, from 0 to 1. |
+| `filter` | `null` | Draws only the charts that pass the filtering condition (default is to draw all). A condition compares a slice share or `$step`; `all` or `any` combine up to 18. `setFilter` replaces it later. See Quick start 5. |
 | `requestInit` | | [`RequestInit`](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit) for a `url` request, such as headers or credentials. It is passed through for GeoParquet, FlatGeobuf, and GeoJSON files. |
 | `slot` | | Mapbox GL JS slot name. The property is set on the layer only when this option is provided. |
 | `readyForDisplay` | `true` | When `false`, `render` draws nothing. The features are still read. See Quick start 4 (2). |
+
+## TypeScript support
+
+The package ships its own type declarations, so no `@types` package is needed. Besides `PieChartLayer`, these types can be imported:
+
+| Type | Describes |
+| --- | --- |
+| `PieChartLayerOptions` | The constructor options. Exactly one of `url` or `data` is allowed. |
+| `PieChartColor` | One slice color: a CSS color string, or a `[red, green, blue]` or `[red, green, blue, alpha]` array. |
+| `PieChartRadiusScale` | The `{steps, fallback}` step scale for `radius`. |
+| `PieChartData` | The in-memory GeoJSON accepted by `data`. |
+| `PieChartFilter` | One condition, or `all` or `any` with a list of conditions, for `filter` and `setFilter`. |
+| `PieChartFilterCondition` | One `[operator, operand, number]` condition. |
+| `PieChartFilterOperator` | One of `==`, `>`, `>=`, `<`, `<=`. |
+
+For example, a filter can be built from typed conditions:
+
+```ts
+import {PieChartLayer, type PieChartFilter, type PieChartFilterCondition} from 'maplibre-gl-pie-charts';
+
+const conditions: PieChartFilterCondition[] = [
+    ['>', 'bachelors', 0.3],
+    ['>=', '$step', 2]
+];
+const filter: PieChartFilter = ['all', ...conditions];
+pies.setFilter(filter);
+```
 
 ## Limitations
 

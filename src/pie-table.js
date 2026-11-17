@@ -2,7 +2,11 @@ import {anchorOfGeometry} from './anchor.js';
 import {lngLatToMercator} from './mercator.js';
 
 export const MAX_SLICES = 8;
-// mercator.xy, radius in CSS pixels, then MAX_SLICES cumulative shares.
+// Radius sizes the shader can look up: every step plus the fallback.
+export const MAX_RADIUS_SIZES = 16;
+// mercator.xy, radius step index, then MAX_SLICES cumulative shares. The
+// index selects a size from the layer's step sizes; a uniform radius is
+// index 0, and a sum above every step total is the fallback index.
 export const INSTANCE_FLOATS = 2 + 1 + MAX_SLICES;
 
 export function buildPieTable(features, options) {
@@ -15,7 +19,7 @@ export function buildPieTable(features, options) {
         if (!anchor) continue;
         const values = sliceValues(options.slices, (name) => feature.properties?.[name]);
         if (!values) continue;
-        writeInstance(instances, count, anchor[0], anchor[1], radiusForSum(values.sum, options.radius), values.shares);
+        writeInstance(instances, count, anchor[0], anchor[1], stepForSum(values.sum, options.radius), values.shares);
         count += 1;
     }
 
@@ -32,7 +36,7 @@ export function buildPieTableFromColumns(geometry, valueColumns, options) {
         if (!anchor) continue;
         const values = sliceValues(options.slices, (name, index) => valueColumns[index][row]);
         if (!values) continue;
-        writeInstance(instances, count, anchor[0], anchor[1], radiusForSum(values.sum, options.radius), values.shares);
+        writeInstance(instances, count, anchor[0], anchor[1], stepForSum(values.sum, options.radius), values.shares);
         count += 1;
     }
 
@@ -52,20 +56,21 @@ function sliceValues(names, read) {
     return {shares, sum};
 }
 
-function radiusForSum(sum, radius) {
-    if (typeof radius === 'number') return radius;
-    for (const [total, size] of radius.steps) {
-        if (sum <= total) return size;
+function stepForSum(sum, radius) {
+    if (typeof radius === 'number') return 0;
+    const {steps} = radius;
+    for (let i = 0; i < steps.length; i++) {
+        if (sum <= steps[i][0]) return i;
     }
-    return radius.fallback;
+    return steps.length;
 }
 
-function writeInstance(instances, index, lng, lat, radius, values) {
+function writeInstance(instances, index, lng, lat, step, values) {
     const cursor = index * INSTANCE_FLOATS;
     const [x, y] = lngLatToMercator(lng, lat);
     instances[cursor] = x;
     instances[cursor + 1] = y;
-    instances[cursor + 2] = radius;
+    instances[cursor + 2] = step;
 
     let sum = 0;
     for (const value of values) sum += value;
@@ -95,7 +100,7 @@ export function createPieAccumulator(options, capacity = 0) {
                 grown.set(instances.subarray(0, count * INSTANCE_FLOATS));
                 instances = grown;
             }
-            writeInstance(instances, count, lng, lat, radiusForSum(values.sum, options.radius), values.shares);
+            writeInstance(instances, count, lng, lat, stepForSum(values.sum, options.radius), values.shares);
             count += 1;
         },
         finish() {

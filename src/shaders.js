@@ -7,7 +7,7 @@
 // with two corners repeated (the QUAD in program.js). Leaving gl_Position at
 // the projected center would stack every corner on that one point.
 //
-// a_radius is CSS pixels and stays that size while the map zooms, so the
+// The radius is CSS pixels and stays that size while the map zooms, so the
 // corner is offset in clip space rather than in mercator units. clip_offset
 // changes units twice. u_pixel_ratio turns CSS pixels into device pixels,
 // because the drawing buffer is the CSS size times that ratio. u_pixel_scale
@@ -23,6 +23,9 @@
 // CSS map at ratio 2 the buffer is 2000 by 1600, the pixel scale is
 // (0.001, -0.00125), and a radius of 16 becomes 32 device pixels. The corner
 // (1, 0) then moves 0.032 in normalized x, which is 16 CSS pixels.
+//
+// A chart that fails the filter puts all six vertices on one point outside
+// clip space, so its triangles have no area and no fragment runs.
 
 export const vertexSource = `#version 300 es
 precision highp float;
@@ -30,10 +33,20 @@ precision highp float;
 uniform mat4 u_matrix;       // MapLibre mercator-to-clip matrix
 uniform vec2 u_pixel_scale;  // device pixels to clip units: (2/width, -2/height)
 uniform float u_pixel_ratio; // device pixels per CSS pixel
+uniform float u_step_sizes[16]; // radius in CSS pixels for each step index
+
+// Filter conditions, matching MAX_FILTER_CONDITIONS in pie-layer.js.
+// Operand 0..7 is a slice share; 8 is the radius step index.
+// Op: 1 ==, 2 >, 3 >=, 4 <, 5 <=.
+uniform int u_filter_count;     // 0 draws every chart
+uniform int u_filter_any;       // 1 passes when any condition holds; 0 needs all
+uniform int u_filter_operand[18];
+uniform int u_filter_op[18];
+uniform float u_filter_value[18];
 
 in vec2 a_extrude;  // quad corner in -1..1, shared by every pie. +y is up
 in vec2 a_mercator; // pie center in mercator 0..1
-in float a_radius;  // pie radius in CSS pixels
+in float a_step;    // radius step index, a whole number
 in vec4 a_shares0;  // cumulative slice shares 0..3, each in 0..1
 in vec4 a_shares1;  // cumulative slice shares 4..7, each in 0..1
 
@@ -41,9 +54,51 @@ out vec2 v_extrude; // quad corner for the fragment wedge and hole tests
 out vec4 v_shares0; // a_shares0, unchanged
 out vec4 v_shares1; // a_shares1, unchanged
 
+const int STEP_OPERAND = 8;
+
+float sliceShare(int slice) {
+    float cumulative[8] = float[8](
+        a_shares0.x, a_shares0.y, a_shares0.z, a_shares0.w,
+        a_shares1.x, a_shares1.y, a_shares1.z, a_shares1.w
+    );
+    float before = slice > 0 ? cumulative[slice - 1] : 0.0;
+    return cumulative[slice] - before;
+}
+
+bool compare(int op, float left, float right) {
+    if (op == 1) return left == right;
+    if (op == 2) return left > right;
+    if (op == 3) return left >= right;
+    if (op == 4) return left < right;
+    return left <= right;
+}
+
+bool passesFilter(int stepIndex) {
+    if (u_filter_count == 0) return true;
+    bool matchAny = u_filter_any == 1;
+    for (int i = 0; i < 18; i++) {
+        if (i >= u_filter_count) break;
+        int operand = u_filter_operand[i];
+        float left = operand == STEP_OPERAND ? float(stepIndex) : sliceShare(operand);
+        bool holds = compare(u_filter_op[i], left, u_filter_value[i]);
+        if (matchAny && holds) return true;
+        if (!matchAny && !holds) return false;
+    }
+    return !matchAny;
+}
+
 void main() {
+    int stepIndex = clamp(int(a_step + 0.5), 0, 15);
+    if (!passesFilter(stepIndex)) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        v_extrude = vec2(0.0);
+        v_shares0 = vec4(0.0);
+        v_shares1 = vec4(0.0);
+        return;
+    }
+
     vec4 center = u_matrix * vec4(a_mercator, 0.0, 1.0); // clip-space pie center
-    float radius = a_radius * u_pixel_ratio;             // CSS pixels to device pixels
+    float radius = u_step_sizes[stepIndex] * u_pixel_ratio; // CSS pixels to device pixels
     vec2 clip_offset = a_extrude * radius * u_pixel_scale; // quad corner in clip units
     // Scale by center.w so the pie stays a fixed screen size after the perspective divide.
     gl_Position = center + vec4(clip_offset * center.w, 0.0, 0.0);
