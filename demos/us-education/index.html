@@ -3,7 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Educational attainment</title>
+    <title>Educational attainment - maplibre-gl-pie-charts demo</title>
+    <meta name="description" content="Map of educational attainment for the US population age 25 and older. Each county is a donut chart drawn by the maplibre-gl-pie-charts layer on MapLibre GL JS.">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.css">
     <style>
         html, body, #map { height: 100%; margin: 0; }
@@ -51,7 +52,7 @@
     </aside>
     <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js"></script>
     <script type="module">
-        import {PieChartLayer} from '../../src/index.js';
+        import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts@0.1.0/dist/index.mjs';
 
         const status = document.getElementById('status');
         const style = await fetch('https://tiles.openfreemap.org/styles/positron').then((response) => {

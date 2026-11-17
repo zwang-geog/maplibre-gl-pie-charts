@@ -32,6 +32,10 @@ A donut is that same chart with a round hole in the middle. The `hole` option is
 
 ### 0 Installation
 
+Use 0 (1) when the page is built from installed packages. Use 0 (2) when the page is one HTML document.
+
+#### 0 (1) Install with npm
+
 Install one map library. The layer is added to a map you create.
 
 ```bash
@@ -58,6 +62,66 @@ Then install this package:
 
 ```bash
 npm install maplibre-gl-pie-charts
+```
+
+Import the class from the package name:
+
+```js
+import {PieChartLayer} from 'maplibre-gl-pie-charts';
+```
+
+#### 0 (2) Load from a single HTML document
+
+MapLibre GL JS is imported from its ESM build. The stylesheet is a separate link, and this package is imported in the same module script.
+
+```html
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@^6.18.0/dist/maplibre-gl.css">
+<script type="module">
+    import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.18.0/dist/maplibre-gl.mjs';
+    import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts@0.1.0/dist/index.mjs';
+</script>
+```
+
+Mapbox GL JS is loaded from a script tag. Import this package in a module script after it.
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mapbox-gl@3/dist/mapbox-gl.css">
+<script src="https://cdn.jsdelivr.net/npm/mapbox-gl@3/dist/mapbox-gl.js"></script>
+<script type="module">
+    import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts@0.1.0/dist/index.mjs';
+</script>
+```
+
+A page that reads GeoParquet or FlatGeobuf also needs an import map. The package loads those readers by bare name, and the map points each name at its file. Place the map before the module script. GeoJSON needs no map.
+
+For GeoParquet:
+
+```html
+<script type="importmap">
+{
+    "imports": {
+        "hyparquet": "https://cdn.jsdelivr.net/npm/hyparquet@1.33.0/src/index.js",
+        "hyparquet-compressors": "https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.3/src/index.js",
+        "fzstd": "https://cdn.jsdelivr.net/npm/fzstd@0.1.1/esm/index.mjs",
+        "hysnappy": "https://cdn.jsdelivr.net/npm/hysnappy@1.1.1/js/index.js"
+    }
+}
+</script>
+```
+
+For FlatGeobuf, `flatgeobuf/generic` imports the other three names:
+
+```html
+<script type="importmap">
+{
+    "imports": {
+        "flatgeobuf/generic": "https://cdn.jsdelivr.net/npm/flatgeobuf@4.6.1/dist/esm/generic.js",
+        "flatbuffers": "https://cdn.jsdelivr.net/npm/flatbuffers@25.9.23/+esm",
+        "slice-source": "https://cdn.jsdelivr.net/npm/slice-source@0.4.1/+esm",
+        "@repeaterjs/repeater": "https://cdn.jsdelivr.net/npm/@repeaterjs/repeater@3.1.0/+esm"
+    }
+}
+</script>
 ```
 
 ### 1 (1) Initialize with a file URL
