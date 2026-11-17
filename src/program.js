@@ -17,7 +17,7 @@ export function createPieProgram(gl) {
     gl.attachShader(program, fragmentShader);
     gl.bindAttribLocation(program, 0, 'a_extrude');
     gl.bindAttribLocation(program, 1, 'a_mercator');
-    gl.bindAttribLocation(program, 2, 'a_radius');
+    gl.bindAttribLocation(program, 2, 'a_step');
     gl.bindAttribLocation(program, 3, 'a_shares0');
     gl.bindAttribLocation(program, 4, 'a_shares1');
     gl.linkProgram(program);
@@ -37,6 +37,12 @@ export function createPieProgram(gl) {
             matrix: gl.getUniformLocation(program, 'u_matrix'),
             pixelScale: gl.getUniformLocation(program, 'u_pixel_scale'),
             pixelRatio: gl.getUniformLocation(program, 'u_pixel_ratio'),
+            stepSizes: gl.getUniformLocation(program, 'u_step_sizes'),
+            filterCount: gl.getUniformLocation(program, 'u_filter_count'),
+            filterAny: gl.getUniformLocation(program, 'u_filter_any'),
+            filterOperand: gl.getUniformLocation(program, 'u_filter_operand'),
+            filterOp: gl.getUniformLocation(program, 'u_filter_op'),
+            filterValue: gl.getUniformLocation(program, 'u_filter_value'),
             colors: gl.getUniformLocation(program, 'u_colors'),
             sliceCount: gl.getUniformLocation(program, 'u_slice_count'),
             hole: gl.getUniformLocation(program, 'u_hole'),
@@ -48,7 +54,7 @@ export function createPieProgram(gl) {
 // Copies one packed pie array into the instance buffer. writeInstance in
 // pie-table.js lays out each pie as INSTANCE_FLOATS floats; buildPieTable,
 // buildPieTableFromColumns, and createPieAccumulator call it. bindPieAttributes
-// has already attached this same buffer to a_mercator, a_radius, a_shares0,
+// has already attached this same buffer to a_mercator, a_step, a_shares0,
 // and a_shares1, so replacing the bytes does not require binding those again.
 export function uploadInstances(gl, buffer, instances) {
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -66,12 +72,12 @@ export function bindPieAttributes(gl, resources) {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.vertexAttribDivisor(0, 0);
 
-    // One pie is INSTANCE_FLOATS floats: mercator.xy, radius, then eight shares.
+    // One pie is INSTANCE_FLOATS floats: mercator.xy, step index, then eight shares.
     // Locations are the bindAttribLocation numbers. Divisor 1 advances once per pie.
     gl.bindBuffer(gl.ARRAY_BUFFER, resources.instances);
     const stride = INSTANCE_FLOATS * 4;
     enableInstance(gl, 1, 2, stride, 0); // a_mercator, floats 0-1
-    enableInstance(gl, 2, 1, stride, 2 * 4); // a_radius, float 2
+    enableInstance(gl, 2, 1, stride, 2 * 4); // a_step, float 2
     enableInstance(gl, 3, 4, stride, 3 * 4); // a_shares0, floats 3-6
     enableInstance(gl, 4, 4, stride, 7 * 4); // a_shares1, floats 7-10
 
