@@ -78,7 +78,7 @@ MapLibre GL JS is imported from its ESM build. The stylesheet is a separate link
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@^6.18.0/dist/maplibre-gl.css">
 <script type="module">
     import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.18.0/dist/maplibre-gl.mjs';
-    import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts@0.1.0/dist/index.mjs';
+    import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts/dist/index.mjs';
 </script>
 ```
 
@@ -88,7 +88,7 @@ Mapbox GL JS is loaded from a script tag. Import this package in a module script
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mapbox-gl@3/dist/mapbox-gl.css">
 <script src="https://cdn.jsdelivr.net/npm/mapbox-gl@3/dist/mapbox-gl.js"></script>
 <script type="module">
-    import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts@0.1.0/dist/index.mjs';
+    import {PieChartLayer} from 'https://cdn.jsdelivr.net/npm/maplibre-gl-pie-charts/dist/index.mjs';
 </script>
 ```
 
@@ -291,6 +291,8 @@ map.setLayoutProperty('pie-layer', 'visibility', 'visible'); // show
 
 ## Limitations
 
+### 1 Mercator projection only
+
 The layer draws in the Mercator projection, and currently it is not compatible with globe projection on Mapbox GL JS and MapLibre GL JS. Each chart is placed with the Mercator matrix, so a globe view does not keep the charts on their features.
 
 Initialize a Mapbox map with `projection` set to `mercator`:
@@ -306,5 +308,9 @@ const map = new mapboxgl.Map({
 ```
 
 Leave a MapLibre map on its Mercator projection. Do not set `projection` to `'globe'`.
+
+### 2 Full-file fetch
+
+A `url` is downloaded in full with one request, whatever its format. GeoParquet is not read with range requests, so columns other than `geometryColumn` and `slices` are downloaded too, even though only those columns are decoded. A host such as GitHub Pages gzips the response, and a range of that response is a slice of the compressed bytes rather than of the file. To keep a large file quick to load, write only the geometry and slice columns, and use Point geometry.
 
 

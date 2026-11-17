@@ -3,12 +3,13 @@ import {buildPieTableFromColumns} from './pie-table.js';
 // Reads geometryColumn and the slice columns. The column arrays live only
 // until buildPieTableFromColumns returns the instance view.
 export async function pieTableFromGeoParquet(source) {
-    const {asyncBufferFromUrl, parquetMetadataAsync, parquetRead, parquetSchema} = await import('hyparquet');
+    const {parquetMetadataAsync, parquetRead, parquetSchema} = await import('hyparquet');
     const {compressors} = await import('hyparquet-compressors');
-    const file = await asyncBufferFromUrl({
-        url: source.url,
-        requestInit: source.requestInit,
-    });
+    const response = await fetch(source.url, source.requestInit);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${source.url}: ${response.status}`);
+    }
+    const file = await response.arrayBuffer();
     const metadata = await parquetMetadataAsync(file);
     const available = new Set(parquetSchema(metadata).children.map((child) => child.element.name));
     const geometryColumn = source.geometryColumn;

@@ -1,6 +1,6 @@
 {
   "name": "maplibre-gl-pie-charts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Add a WebGL pie or donut chart layer on a MapLibre GL JS or Mapbox GL JS map to compare share patterns across geographic units",
   "type": "module",
   "main": "dist/index.js",
